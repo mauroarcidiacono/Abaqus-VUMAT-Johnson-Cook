@@ -61,11 +61,12 @@
      1 D3, D4, D5, beta, Cp, unit_conversion_factor, 
      2 convergence_tolerance_factor, tolerance, mu, lambda, 
      3 eps, Temp, sigmaY, equiv_stress, pl_strain_inc, 
-     4 eps_iter,
-     5 C_mat(ndir+nshr, ndir+nshr), stress_old(ndir+nshr),
-     6 trial_stress_inc(ndir+nshr), dev_stress(ndir+nshr), 
-     7 pl_strain_dir(ndir+nshr), C_PSD(ndir+nshr), 
-     8 stress_inc_iter(ndir+nshr)
+     4 eps_iter, equiv_stress_jc, f, pl_strain_inc_min, 
+     5 pl_strain_inc_max, dWork, dPwork
+     6 C_mat(ndir+nshr, ndir+nshr), stress_old(ndir+nshr),
+     7 trial_stress(ndir+nshr), dev_stress(ndir+nshr), 
+     8 pl_strain_dir(ndir+nshr), C_PSD(ndir+nshr), 
+     9 corrected_stress_iter(ndir+nshr)
 !
       pointer (ptrjElemNum, jElemNum)
       dimension jElemNum(nblock)
@@ -166,8 +167,8 @@
               stateNew(i, 2) = 0.d0           ! Equivalent plastic strain
               stateNew(i, 3) = Tr             ! Initial temperature
               stateNew(i, 4) = 0.d0           ! Yield stress
-              stateNew(i, 5) = 0.d0		    ! Plastic strain increment in the last step
-              stateNew(i, 6) = 1	          ! Number of iterations
+              stateNew(i, 5) = 0.d0		    ! Plastic strain increment
+              stateNew(i, 6) = 1	          ! Total number of iterations
 
           ! ############################ From step 2 onward ############################    
           else
@@ -177,11 +178,11 @@
               sigmaY = stateOld(i, 4)                                   ! Yield stress
               stress_old(1:ndir+nshr) = stressOld(k, 1:ndir+nshr)       ! Stress tensor in previous step
               
-              trial_stress_inc = 0.0d0         
+              trial_stress = 0.0d0                                      ! Trial total stress with increment   
 
               ! Compute Hooke's Law as a function of the strain increment
               ! Calculates the stress trial increment tensor assuming a pure elastic response
-              call elastic_stress(strainInc, trial_stress_inc, stressOld, 
+              call elastic_stress(strainInc, trial_stress, stressOld, 
      1                            lambda, mu, ndir, nshr) 
 
               ! Start the calculations to obtain the direction and magnitude of the
@@ -189,8 +190,7 @@
               ! Direction = df/dSigma
               ! Magnitude = dLambda (plastic multiplier)
               ! dEpsilon^p = dLambda*df/dSigma = dp*3/2*DevStress/EquivalentStress
-              
-              call equivalent_stress(equiv_stress, trial_stress_inc, 
+              call equivalent_stress(equiv_stress, trial_stress, 
      1                               dev_stress, ndir, nshr)
 
               ! Plastic strain direction
@@ -216,80 +216,103 @@
               
               num_iter = 0    ! number of iterations
               
-              do while (num_iter < max_num_iter) 
+              do while (num_iter <= max_num_iter) 
+
+                  ! Iteration control
+                  num_iter = num_iter + 1
+                  if (num_iter == max_num_iter) then
+                      print*, 'ERROR - too many iterations | iter = ', iter
+                      write (6,*) 'ERROR - too many iterations | iter = ', iter
+                      call XPLB_EXIT 
+                  end if
+
                   ! Iteration effective plastic strain = effective plastic strain + increment
                   eps_iter = eps + pl_strain_inc  
                   ! Effective plastic strain increment rate  
                   eps_rate = pl_strain_inc/dtArray(1)
                   
-                  ! Compute the stress increment corrected with the plastic corrector for this
-                  ! iteration (stress_inc_iter)
-                  stress_inc_iter = trial_stress_inc - pl_strain_inc*C_PSD
+                  ! Compute the stress using the plastic corrector for this iteration 
+                  ! (corrected_stress_iter)
+                  corrected_stress_iter = trial_stress - pl_strain_inc*C_PSD
 
                   ! Calculate the equivalent stress with the corrected stress increment in this
                   ! iteration
-                  call equivalent_stress(equiv_stress, stress_inc_iter, 
-     1                               dev_stress, ndir, nshr)
+                  call equivalent_stress(equiv_stress, corrected_stress_iter, 
+     1                                   dev_stress, ndir, nshr)
 
+                  ! Calculate the Johnson-Cook equivalent stress
+                  call johnson_cook(eps_iter, A, B, n, m, Tm, Tr, Temp, C,
+     1                              epsilon_dot_zero, eps_rate, equiv_stress_jc)
 
-        
-        c evaluating new yield stress for the increment 'ep'
-                                 call func_syield(A, B, epbarN, n, Tr, Tm, tempN, m, C, eprateN,
-             1			rate0, sigyN)
-                if (sigyN .lt. sigyT) sigyN = sigyT
-        
-                f = sigeqv - sigyN
-                if (abs(f) .lt. tol) exit 			! out of the iteration
-        
-        c elastic criteria, ep = 0 & f < 0
-                if ((ep .eq. 0.d0) .and. (f .lt. 0.d0)) go to 12
-        
-        c rearranging the margins and new plastic strain increm.
-                if ((f .ge. 0.d0) .and. (ep .ge. epmin)) epmin = ep
-                if ((f .lt. 0.d0) .and. (ep .lt. epmax)) epmax = ep
-                ep = 0.5d0 * (epmax + epmin)
-        
-        c restoring the plastic strain increment from the last step
-                if (iter .eq. 1) ep = stateOld(k, 5)
-              end do 
-        
-         12   stressNew(k, 1:6) = sNew(1:6)
+                  ! If the calculated JC is less than the previous one, take the previous one
+                  ! as equivalent yield stress. 
+                  if (equiv_stress_jc < sigmaY) then
+                      equiv_stress_jc = sigmaY
+                  end if
+                  
+                  ! Compare the calculated JC stress with the equivalent stress resulting from
+                  ! the corrected stress state. These two values should be as close as possible
+                  ! within the specified tolerance to obtain the plastic strain increment for a
+                  ! JC material
+                  f = equiv_stress - equiv_stress_jc
 
-         num_iter = num_iter + 1
+                  if (abs(f) < tolerance) then
+                      exit
+                  end if
 
-         if (iter .gt. Niter-1.) then
-            print*, 'too many iterations, iter = ', iter
-            call XPLB_EXIT
-          end if
-        
+                  ! If there is no plastic strain increment and the JC yield stress is bigger
+                  ! than the equivalent stress, the stress state is elastic
+                  if ((pl_strain_inc == 0.d0) .and. (f < 0.d0)) then
+                        exit
+                  end if
 
+                  ! Update the min and max plastic strain increment limits
+                  if ((f >= 0.d0) .and. (pl_strain_inc >= pl_strain_inc_min)) then
+                        pl_strain_inc_min = pl_strain_inc  
+                  end if    
 
+                  if ((f < 0.d0) .and. (pl_strain_inc < pl_strain_inc_max)) then
+                        pl_strain_inc_max = pl_strain_inc  
+                  end if
 
+                  ! Update the plastic strain increment
+                  pl_strain_inc = 0.5d0 * (pl_strain_inc_max + pl_strain_inc_min)
 
+                  ! Update the pl_strain_inc to ensure continuity across increments and to 
+                  ! improve the initial guess
+                  if (num_iter == 1) then
+                      pl_strain_inc = stateOld(i, 5)
+                  end if
 
-
-
-
-
-        c work, plastic work and temp
-              dWork = dot_product( 0.5d0*(sOld(1:6) + sNew(1:6)),
-             1  strainInc(k, 1:6))
-              dPwork = 0.5d0 * ep * sigeqv
-              enerInternNew(k) = enerInternOld(k) + dWork/rho
-              enerInelasNew(k) = enerInelasOld(k) + dPwork/rho
-        
-        c updating state variables
-                           stateNew(k, 1) = 1.d0							! to flag the initial step
-                          stateNew(k, 2) = epbarN						! plastic strain
-                          stateNew(k, 3) = tempT + WH*TQ*dPwork/rho/Cp	! temperature
-                          stateNew(k, 4) = sigyN						! yield stress
-                          stateNew(k, 5) = ep 							! plastic strain incre.
-                          stateNew(k, 6) = stateOld(k, 6) + iter ! number of iterations
-        
+              end do
 
           
+          ! Save the newly calculated stress
+          stressNew(i, 1:6) = corrected_stress_iter(1:6)
+
+          ! Calculate the work increment
+          dWork = dot_product(0.5d0 * (corrected_stress_iter(1:6) + stress_old(1:6)), 
+     1                        strainInc(i, 1:6))
+
+          ! Calculate the plastic work increment
+          dPwork = 0.5d0 * pl_strain_inc * equiv_stress
+
+          ! Calculate the internal energy per unit mass
+          enerInternNew(i) = enerInternOld(i) + dWork/density(i)
+
+          ! Calculate the dissipated inelastic energy per unit mass
+          enerInelasNew(i) = enerInelasOld(i) + dPwork/density(i)
+      
+        
+          ! Update the state variables
+          stateNew(i, 1) = 1.d0					                              ! Initiation flag	
+          stateNew(i, 2) = eps_iter					                              ! Equivalent plastic strain
+          stateNew(i, 3) = Temp + unit_conversion_factor*beta*dPwork/density(i)/Cp	      ! Temperature
+          stateNew(i, 4) = equiv_stress_jc						            ! Yield stress
+          stateNew(i, 5) = pl_strain_inc 							            ! Plastic strain increment in the step
+          stateNew(i, 6) = stateOld(k, 6) + num_iter                                      ! Total number of iterations
           
-            endif
+          endif
 
       enddo
 
@@ -297,6 +320,6 @@
 ! Subroutines
       include 'utils.for'
 
-
+      
       return
       end
