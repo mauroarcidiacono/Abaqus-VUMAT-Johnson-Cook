@@ -172,7 +172,7 @@
           ! ############################ From step 2 onward ############################    
           else
 
-              eps = stateOld(i, 2)                                      ! Effective plastic strain
+              eps = stateOld(i, 2)                                      ! Previous effective plastic strain
               Temp = stateOld(i, 3)                                     ! Temperature
               sigmaY = stateOld(i, 4)                                   ! Yield stress
               stress_old(1:ndir+nshr) = stressOld(k, 1:ndir+nshr)       ! Stress tensor in previous step

@@ -30,8 +30,8 @@
        ! notation stress tensor.
 
             integer ndir, nshr
-            real*8 stress_tensor(ndir+nshr), hyd, dev_stress(ndir+nshr),
-     1      equiv_stress
+            real*8 stress_tensor(ndir+nshr), hyd, 
+     1      dev_stress(ndir+nshr), equiv_stress
           
             ! Calculate the hydrostatic component of the stress tensor
             hyd = sum(stress_tensor(1:ndir))/3.d0
@@ -40,27 +40,39 @@
             dev_stress(ndir+1:ndir+nshr) = stress_tensor(ndir+1:ndir+nshr)
 
             ! Compute the equivalent stress
-            equiv_stress = sqrt(3.d0/2.d0 *(dev_stress(1)**2.d0 + dev_stress(2)**2.d0 +
-     1      dev_stress(3)**2.d0 + 2.d0*dev_stress(4)**2.d0 + 2.d0*dev_stress(5)**2.d0 +
-     2      2.d0*dev_stress(6)**2.d0 ))
+            equiv_stress = sqrt(3.d0/2.d0 *(dev_stress(1)**2.d0 + 
+     1      dev_stress(2)**2.d0 + dev_stress(3)**2.d0 + 
+     2      2.d0*dev_stress(4)**2.d0 + 2.d0*dev_stress(5)**2.d0 + 
+	 3      2.d0*dev_stress(6)**2.d0 ))
      
       return
       end
 
 
-      subroutine johnson_cook(eps_iter, A, B, n, m, Tm, Tr, C, 
+      subroutine johnson_cook(eps_iter, A, B, n, m, Tm, Tr, T, C, 
      1 epsilon_dot_zero, eps_rate, equiv_stress_jc)
       ! This subroutine calculates the Von Mises stress using the 
       ! Johnson Cook equation. 
 
-      real*8 A, B, n, m, Tm, Tr, C, epsilon_dot_zero, eps_rate, 
-     1 equiv_stress_jc, T_  
+            real*8 eps_iter, A, B, n, m, Tm, Tr, T, C,  
+     1      epsilon_dot_zero, eps_rate, homologous_Temp, 
+	 2      equiv_stress_jc  
 
-      equiv_stress = (A + B*eps_iter**n)*
-     1 (1 + C*log(eps_rate/epsilon_dot_zero))*
-     2 (1 - )
+            if (T < Tr) then
+	   	        homologous_Temp = 0.d0
+	        else if (T > Tm) then
+		        homologous_Temp = 1.d0
+	        else
+		        homologous_Temp = (T - Tr)/(Tm - Tr)
+	        end if
+	  
+	        if (eps_rate == 0.d0) then
+		        eps_rate = epsilon_dot_zero
+			end if
+		
+            equiv_stress_jc = (A + B*eps_iter**n)*
+     1      (1 + C*log(eps_rate/epsilon_dot_zero))*
+     2      (1 - homologous_Temp**m)
 
       return
       end
-
-            
