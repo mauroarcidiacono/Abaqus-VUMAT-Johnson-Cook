@@ -19,6 +19,9 @@
 ! SV5: plastic strain increment.
 ! SV6: total number of iterations.
 !
+! Note: this code was made to run the job using double precision due to
+! variable declaration inside the subroutines (real*8).
+!
 ! ########################################################################
 
 
@@ -62,7 +65,7 @@
      2 convergence_tolerance_factor, tolerance, mu, lambda, 
      3 eps, Temp, sigmaY, equiv_stress, pl_strain_inc, 
      4 eps_iter, equiv_stress_jc, f, pl_strain_inc_min, 
-     5 pl_strain_inc_max, dWork, dPwork
+     5 pl_strain_inc_max, dWork, dPwork, rho,
      6 C_mat(ndir+nshr, ndir+nshr), stress_old(ndir+nshr),
      7 trial_stress(ndir+nshr), dev_stress(ndir+nshr), 
      8 pl_strain_dir(ndir+nshr), C_PSD(ndir+nshr), 
@@ -97,26 +100,27 @@
       epsilon_dot_zero = props(10)          ! Reference strain rate
 
       ! Johnson-Cook damage parameters
-      D1 = props(11)
-      D2 = props(12)
-      D3 = props(13)
-      D4 = props(14)
-      D5 = props(15)
+      ! D1 = props(11)
+      ! D2 = props(12)
+      ! D3 = props(13)
+      ! D4 = props(14)
+      ! D5 = props(15)
 
       ! Taylor-Quinney (TQ) parameters
-      beta = props(16)                      ! Taylor-Quinney coefficient
-      Cp = props(17)                        ! Heat capacity
+      beta = props(11)                      ! Taylor-Quinney coefficient
+      Cp = props(12)                        ! Heat capacity
       ! Factor for unit conversion to compute the temperature using the 
       ! TQ equation. Use only when needed according to your units,
       ! otherwise, assign 1. 
-      unit_conversion_factor = props(18)    
+      rho = props(13)
+      unit_conversion_factor = props(14)    
 
       ! Convergence tolerance for the increment of effective strain calculation
-      convergence_tolerance_factor = props(19)
+      convergence_tolerance_factor = props(15)
       tolerance = E*convergence_tolerance_factor
 
       ! Maximum number of iterations
-      max_num_iter = props(20)
+      max_num_iter = props(16)
 
 
 
@@ -124,14 +128,14 @@
 
       ! Lame parameters
       ! Lame first parameter
-      lambda = (E*nu)/((1 + nu)*(1 - 2.0d0*nu))  
+      lambda = (E*nu)/((1.d0 + nu)*(1.d0 - 2.0d0*nu))  
       ! Lame second parameter  
-      mu = E/(2*(1 + nu))
+      mu = E/(2.0d0*(1.d0 + nu))
 
       ! Elasticity matrix (C_mat)
       ! Linear elastic, homogeneous and isotropic material 
       ! Initialize the elasticity matrix to zero
-      C_mat = 0.0d0
+      C_mat = 0.d0
 
 	do i = 1, ndir
 	    do j = 1, ndir
@@ -147,7 +151,6 @@
 	end do 
 
 
-
 ! ###########################################################################################################      
 ! ############################ Loop through each element to perform computations ############################
 ! ###########################################################################################################  
@@ -157,12 +160,12 @@
       do i = 1, nblock
           
           ! ############################## Initial state ###############################   
-          if (stateOld(i, 1) == 0) then
+          if (stateOld(i, 1) == 0.d0) then
               
               ! Compute Hooke's Law as a function of the strain increment
-              call elastic_stress(strainInc, stressNew, stressOld, 
-     1                            lambda, mu, ndir, nshr)
-
+              call elastic_stress(strainInc(i, 1:ndir+nshr), stressNew(i, 1:ndir+nshr),  
+     1                            stressOld(i, 1:ndir+nshr), lambda, mu, ndir, nshr)
+              
               stateNew(i, 1) = 1.d0           ! Initiation flag
               stateNew(i, 2) = 0.d0           ! Equivalent plastic strain
               stateNew(i, 3) = Tr             ! Initial temperature
@@ -176,14 +179,14 @@
               eps = stateOld(i, 2)                                      ! Previous effective plastic strain
               Temp = stateOld(i, 3)                                     ! Temperature
               sigmaY = stateOld(i, 4)                                   ! Yield stress
-              stress_old(1:ndir+nshr) = stressOld(k, 1:ndir+nshr)       ! Stress tensor in previous step
+              stress_old(1:ndir+nshr) = stressOld(i, 1:ndir+nshr)       ! Stress tensor in previous step
               
-              trial_stress = 0.0d0                                      ! Trial total stress with increment   
+              trial_stress = 0.d0                                       ! Trial total stress with increment   
 
               ! Compute Hooke's Law as a function of the strain increment
               ! Calculates the stress trial increment tensor assuming a pure elastic response
-              call elastic_stress(strainInc, trial_stress, stressOld, 
-     1                            lambda, mu, ndir, nshr) 
+              call elastic_stress(strainInc(i, 1:ndir+nshr), trial_stress,  
+     1                            stressOld(i, 1:ndir+nshr), lambda, mu, ndir, nshr) 
 
               ! Start the calculations to obtain the direction and magnitude of the
               ! plastic strain increment
@@ -198,6 +201,7 @@
                   pl_strain_dir = (3.d0*dev_stress)/(2.d0*equiv_stress)
               else
                   pl_strain_dir = 0
+              end if
 
               ! Elasticity matrix C times the plastic strain direction to calculate
               ! later the plastic corrector
@@ -221,8 +225,8 @@
                   ! Iteration control
                   num_iter = num_iter + 1
                   if (num_iter == max_num_iter) then
-                      print*, 'ERROR - too many iterations | iter = ', iter
-                      write (6,*) 'ERROR - too many iterations | iter = ', iter
+                      print*, 'ERROR - too many iterations | iter = ', num_iter
+                      write (6,*) 'ERROR - too many iterations | iter = ', num_iter
                       call XPLB_EXIT 
                   end if
 
@@ -286,7 +290,6 @@
 
               end do
 
-          
           ! Save the newly calculated stress
           stressNew(i, 1:6) = corrected_stress_iter(1:6)
 
@@ -298,28 +301,26 @@
           dPwork = 0.5d0 * pl_strain_inc * equiv_stress
 
           ! Calculate the internal energy per unit mass
-          enerInternNew(i) = enerInternOld(i) + dWork/density(i)
+          enerInternNew(i) = enerInternOld(i) + dWork/rho
 
           ! Calculate the dissipated inelastic energy per unit mass
-          enerInelasNew(i) = enerInelasOld(i) + dPwork/density(i)
+          enerInelasNew(i) = enerInelasOld(i) + dPwork/rho
       
         
           ! Update the state variables
           stateNew(i, 1) = 1.d0					                              ! Initiation flag	
           stateNew(i, 2) = eps_iter					                              ! Equivalent plastic strain
-          stateNew(i, 3) = Temp + unit_conversion_factor*beta*dPwork/density(i)/Cp	      ! Temperature
+          stateNew(i, 3) = Temp + unit_conversion_factor*beta*dPwork/rho/Cp	            ! Temperature
           stateNew(i, 4) = equiv_stress_jc						            ! Yield stress
           stateNew(i, 5) = pl_strain_inc 							            ! Plastic strain increment in the step
-          stateNew(i, 6) = stateOld(k, 6) + num_iter                                      ! Total number of iterations
+          stateNew(i, 6) = stateOld(i, 6) + num_iter                                      ! Total number of iterations
           
-          endif
+          end if
 
-      enddo
+      end do
 
-
-! Subroutines
-      include 'utils.for'
-
-      
       return
       end
+
+! Additional subroutines
+      include 'utils.for'

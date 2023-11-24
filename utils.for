@@ -7,7 +7,7 @@
 
             integer ndir, nshr
             real*8 strainInc(ndir+nshr), stressNew(ndir+nshr),  
-     1      stressOld(ndir+nshr), lambda, mu 
+     1      stressOld(ndir+nshr), lambda, mu, trace_strainInc 
           
             ! Trace calculation (EPSILON_kk)
             trace_strainInc = sum(strainInc(1:ndir))
@@ -42,9 +42,9 @@
             ! Compute the equivalent stress
             equiv_stress = sqrt(3.d0/2.d0 *(dev_stress(1)**2.d0 + 
      1      dev_stress(2)**2.d0 + dev_stress(3)**2.d0 + 
-     2      2.d0*dev_stress(4)**2.d0 + 2.d0*dev_stress(5)**2.d0 + 
-	 3      2.d0*dev_stress(6)**2.d0 ))
-     
+     2      2.d0*dev_stress(4)**2.d0 + 2.d0*dev_stress(5)**2.d0 +     
+     3      2.d0*dev_stress(6)**2.d0))
+
       return
       end
 
@@ -56,7 +56,7 @@
 
             real*8 eps_iter, A, B, n, m, Tm, Tr, T, C,  
      1      epsilon_dot_zero, eps_rate, homologous_Temp, 
-	 2      equiv_stress_jc  
+     2      equiv_stress_jc  
 
             if (T < Tr) then
 	   	        homologous_Temp = 0.d0
