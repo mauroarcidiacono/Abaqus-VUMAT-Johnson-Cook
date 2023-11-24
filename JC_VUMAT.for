@@ -170,8 +170,8 @@
               stateNew(i, 2) = 0.d0           ! Equivalent plastic strain
               stateNew(i, 3) = Tr             ! Initial temperature
               stateNew(i, 4) = 0.d0           ! Yield stress
-              stateNew(i, 5) = 0.d0		    ! Plastic strain increment
-              stateNew(i, 6) = 1	          ! Total number of iterations
+              stateNew(i, 5) = 0.d0           ! Plastic strain increment
+              stateNew(i, 6) = 1              ! Total number of iterations
 
           ! ############################ From step 2 onward ############################    
           else
@@ -209,7 +209,7 @@
 
               
               ! Initial value of the strain increment
-              pl_strain_inc = 0.d0						      ! Initial plastic strain increment
+              pl_strain_inc = 0.d0                                      ! Initial plastic strain increment
               pl_strain_inc_min = 0.d0                                  ! Minimum plastic strain increment
               pl_strain_inc_max = equiv_stress/(2.d0*mu)                ! Maximum plastic strain increment
 
@@ -308,11 +308,11 @@
       
         
           ! Update the state variables
-          stateNew(i, 1) = 1.d0					                              ! Initiation flag	
-          stateNew(i, 2) = eps_iter					                              ! Equivalent plastic strain
-          stateNew(i, 3) = Temp + unit_conversion_factor*beta*dPwork/rho/Cp	            ! Temperature
-          stateNew(i, 4) = equiv_stress_jc						            ! Yield stress
-          stateNew(i, 5) = pl_strain_inc 							            ! Plastic strain increment in the step
+          stateNew(i, 1) = 1.d0                                                           ! Initiation flag	
+          stateNew(i, 2) = eps_iter                                                       ! Equivalent plastic strain
+          stateNew(i, 3) = Temp + unit_conversion_factor*beta*dPwork/rho/Cp               ! Temperature
+          stateNew(i, 4) = equiv_stress_jc                                                ! Yield stress
+          stateNew(i, 5) = pl_strain_inc                                                  ! Plastic strain increment in the step
           stateNew(i, 6) = stateOld(i, 6) + num_iter                                      ! Total number of iterations
           
           end if
