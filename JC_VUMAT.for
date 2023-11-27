@@ -1,5 +1,5 @@
 ! ########################################################################
-! User subroutine to model the Jonhson-Cook plasticity, damage and the 
+! User subroutine to model the Johnson-Cook plasticity, damage and the 
 ! Taylor-Quinney conversion of mechanical work into heat during plastic
 ! deformation.
 !
