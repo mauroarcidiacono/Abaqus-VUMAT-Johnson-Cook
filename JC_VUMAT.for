@@ -17,7 +17,10 @@
 ! SV3: temperature.
 ! SV4: Von Mises yield stress.
 ! SV5: plastic strain increment.
-! SV6: total number of iterations.
+! SV6: parameter D of the Johnson-Cook damage model.
+! SV7: total number of iterations.
+! SV8: status of the element. If 1, the element is active, otherwise, the
+! element was deleted.
 !
 ! Note: this code was made to run the job using double precision due to
 ! variable declaration inside the subroutines (real*8).
@@ -61,11 +64,11 @@
       character*80 cmname
       integer num_iter, max_num_iter, i, j
       real*8 E, nu, A, B, n, m, Tm, Tr, C, epsilon_dot_zero, D1, D2,
-     1 D3, D4, D5, beta, Cp, unit_conversion_factor, 
+     1 D3, D4, D5, beta, Cp, unit_conversion_factor, D,
      2 convergence_tolerance_factor, tolerance, mu, lambda, 
-     3 eps, Temp, sigmaY, equiv_stress, pl_strain_inc, 
+     3 eps, Temp, sigmaY, equiv_stress, pl_strain_inc,  
      4 eps_iter, equiv_stress_jc, f, pl_strain_inc_min, 
-     5 pl_strain_inc_max, dWork, dPwork, rho,
+     5 pl_strain_inc_max, dWork, dPwork, rho, equiv_strain_fracture,
      6 C_mat(ndir+nshr, ndir+nshr), stress_old(ndir+nshr),
      7 trial_stress(ndir+nshr), dev_stress(ndir+nshr), 
      8 pl_strain_dir(ndir+nshr), C_PSD(ndir+nshr), 
@@ -100,27 +103,27 @@
       epsilon_dot_zero = props(10)          ! Reference strain rate
 
       ! Johnson-Cook damage parameters
-      ! D1 = props(11)
-      ! D2 = props(12)
-      ! D3 = props(13)
-      ! D4 = props(14)
-      ! D5 = props(15)
+      D1 = props(11)
+      D2 = props(12)
+      D3 = props(13)
+      D4 = props(14)
+      D5 = props(15)
 
       ! Taylor-Quinney (TQ) parameters
-      beta = props(11)                      ! Taylor-Quinney coefficient
-      Cp = props(12)                        ! Heat capacity
+      beta = props(16)                      ! Taylor-Quinney coefficient
+      Cp = props(17)                        ! Heat capacity
       ! Factor for unit conversion to compute the temperature using the 
       ! TQ equation. Use only when needed according to your units,
       ! otherwise, assign 1. 
-      rho = props(13)
-      unit_conversion_factor = props(14)    
+      rho = props(18)
+      unit_conversion_factor = props(19)    
 
       ! Convergence tolerance for the increment of effective strain calculation
-      convergence_tolerance_factor = props(15)
+      convergence_tolerance_factor = props(20)
       tolerance = E*convergence_tolerance_factor
 
       ! Maximum number of iterations
-      max_num_iter = props(16)
+      max_num_iter = props(21)
 
 
 
@@ -171,7 +174,9 @@
               stateNew(i, 3) = Tr             ! Initial temperature
               stateNew(i, 4) = 0.d0           ! Yield stress
               stateNew(i, 5) = 0.d0           ! Plastic strain increment
-              stateNew(i, 6) = 1              ! Total number of iterations
+              stateNew(i, 6) = 0.d0           ! Parameter D
+              stateNew(i, 7) = 1              ! Total number of iterations
+              stateNew(i, 8) = 1              ! Element status
 
           ! ############################ From step 2 onward ############################    
           else
@@ -179,6 +184,7 @@
               eps = stateOld(i, 2)                                      ! Previous effective plastic strain
               Temp = stateOld(i, 3)                                     ! Temperature
               sigmaY = stateOld(i, 4)                                   ! Yield stress
+              D = stateOld(i, 6)                                        ! Parameter D
               stress_old(1:ndir+nshr) = stressOld(i, 1:ndir+nshr)       ! Stress tensor in previous step
               
               trial_stress = 0.d0                                       ! Trial total stress with increment   
@@ -239,14 +245,14 @@
                   ! (corrected_stress_iter)
                   corrected_stress_iter = trial_stress - pl_strain_inc*C_PSD
 
-                  ! Calculate the equivalent stress with the corrected stress increment in this
+                  ! Calculate the equivalent stress with the corrected stress in this
                   ! iteration
                   call equivalent_stress(equiv_stress, corrected_stress_iter, 
      1                                   dev_stress, ndir, nshr)
 
                   ! Calculate the Johnson-Cook equivalent stress
-                  call johnson_cook(eps_iter, A, B, n, m, Tm, Tr, Temp, C,
-     1                              epsilon_dot_zero, eps_rate, equiv_stress_jc)
+                  call johnson_cook_plasticity(eps_iter, A, B, n, m, Tm, Tr, Temp, C,
+     1                                         epsilon_dot_zero, eps_rate, equiv_stress_jc)
 
                   ! If the calculated JC is less than the previous one, take the previous one
                   ! as equivalent yield stress. 
@@ -290,31 +296,44 @@
 
               end do
 
-          ! Save the newly calculated stress
-          stressNew(i, 1:6) = corrected_stress_iter(1:6)
+              ! Save the newly calculated stress
+              stressNew(i, 1:6) = corrected_stress_iter(1:6)
 
-          ! Calculate the work increment
-          dWork = dot_product(0.5d0 * (corrected_stress_iter(1:6) + stress_old(1:6)), 
+              ! Calculate the work increment
+              dWork = dot_product(0.5d0 * (corrected_stress_iter(1:6) + stress_old(1:6)), 
      1                        strainInc(i, 1:6))
 
-          ! Calculate the plastic work increment
-          dPwork = 0.5d0 * pl_strain_inc * equiv_stress
+              ! Calculate the plastic work increment
+              dPwork = 0.5d0 * pl_strain_inc * equiv_stress
 
-          ! Calculate the internal energy per unit mass
-          enerInternNew(i) = enerInternOld(i) + dWork/rho
+              ! Calculate the internal energy per unit mass
+              enerInternNew(i) = enerInternOld(i) + dWork/rho
 
-          ! Calculate the dissipated inelastic energy per unit mass
-          enerInelasNew(i) = enerInelasOld(i) + dPwork/rho
-      
+              ! Calculate the dissipated inelastic energy per unit mass
+              enerInelasNew(i) = enerInelasOld(i) + dPwork/rho
+
+              ! Evaluate if the element must be deleted
+              call johnson_cook_damage(equiv_strain_fracture, equiv_stress, Tm, Tr, D1, D2,
+     1                                 D3, D4, D5, Temp, epsilon_dot_zero, eps_rate, 
+     2                                 corrected_stress_iter, ndir, nshr)
         
-          ! Update the state variables
-          stateNew(i, 1) = 1.d0                                                           ! Initiation flag	
-          stateNew(i, 2) = eps_iter                                                       ! Equivalent plastic strain
-          stateNew(i, 3) = Temp + unit_conversion_factor*beta*dPwork/rho/Cp               ! Temperature
-          stateNew(i, 4) = equiv_stress_jc                                                ! Yield stress
-          stateNew(i, 5) = pl_strain_inc                                                  ! Plastic strain increment in the step
-          stateNew(i, 6) = stateOld(i, 6) + num_iter                                      ! Total number of iterations
-          
+              D = D + pl_strain_inc/equiv_strain_fracture
+
+              ! Update the state variables
+              stateNew(i, 1) = 1.d0                                                           ! Initiation flag	
+              stateNew(i, 2) = eps_iter                                                       ! Equivalent plastic strain
+              stateNew(i, 3) = Temp + unit_conversion_factor*beta*dPwork/rho/Cp               ! Temperature
+              stateNew(i, 4) = equiv_stress_jc                                                ! Yield stress
+              stateNew(i, 5) = pl_strain_inc                                                  ! Plastic strain increment in the step
+              stateNew(i, 6) = D                                                              ! Parameter D
+              stateNew(i, 7) = stateOld(i, 7) + num_iter                                      ! Total number of iterations
+
+              if (D >= 1) then
+                  stateNew(i, 8) = 0    ! Delete element
+              else
+                  stateNew(i, 8) = 1    ! Active element
+              end if
+
           end if
 
       end do
