@@ -317,7 +317,7 @@
      1                                 D3, D4, D5, Temp, epsilon_dot_zero, eps_rate, 
      2                                 corrected_stress_iter, ndir, nshr)
         
-              D = D + pl_strain_inc/equiv_strain_fracture
+              D = D + abs(pl_strain_inc/equiv_strain_fracture)
 
               ! Update the state variables
               stateNew(i, 1) = 1.d0                                                           ! Initiation flag	

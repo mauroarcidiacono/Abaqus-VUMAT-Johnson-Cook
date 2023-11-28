@@ -79,16 +79,16 @@
       end
 
 
-      subroutine johnson_cook_damage(equiv_stress, Tm, Tr, D1, D2, D3,
-     1 D4, D5, T, epsilon_dot_zero, eps_rate, stress_tensor, ndir,
-     2 nshr)
+      subroutine johnson_cook_damage(equiv_strain_frac, equiv_stress,
+     1 Tm, Tr, D1, D2, D3, D4, D5, T, epsilon_dot_zero, eps_rate,
+     2 stress_tensor, ndir, nshr)
       ! This subroutine calculates Johnson-Cook damage parameter D
       ! to analyse the status of an element. 
 
             integer ndir, nshr
             real*8 D, Tm, Tr, D1, D2, D3, D4, D5, T,  
      1      epsilon_dot_zero, eps_rate, homologous_Temp, 
-     2      pressure_stress_ratio, equiv_strain_fracture,
+     2      pressure_stress_ratio, equiv_strain_frac,
      3      stress_tensor(ndir+nshr), hyd, equiv_stress
 
             if (T < Tr) then
@@ -113,7 +113,7 @@
                 pressure_stress_ratio = hyd/equiv_stress
             end if
 		
-            equiv_strain_fracture = (D1 + 
+            equiv_strain_frac = (D1 + 
      1      D2*exp(D3*pressure_stress_ratio))*
      2      (1 + D4*log(eps_rate/epsilon_dot_zero))*
      3      (1 + D5*homologous_Temp)
