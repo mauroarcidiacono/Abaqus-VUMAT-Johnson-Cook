@@ -82,8 +82,8 @@
       subroutine johnson_cook_damage(equiv_strain_frac, equiv_stress,
      1 Tm, Tr, D1, D2, D3, D4, D5, T, epsilon_dot_zero, eps_rate,
      2 stress_tensor, ndir, nshr)
-      ! This subroutine calculates Johnson-Cook damage parameter D
-      ! to analyse the status of an element. 
+      ! This subroutine calculates the equivalent strain for fracture
+      ! for the Johnson-Cook damage model. 
 
             integer ndir, nshr
             real*8 D, Tm, Tr, D1, D2, D3, D4, D5, T,  
