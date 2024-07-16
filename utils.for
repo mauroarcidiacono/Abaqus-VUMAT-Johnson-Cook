@@ -114,7 +114,7 @@
             end if
 		
             equiv_strain_frac = (D1 + 
-     1      D2*exp(D3*pressure_stress_ratio))*
+     1      D2*exp(-D3*pressure_stress_ratio))*
      2      (1 + D4*log(eps_rate/epsilon_dot_zero))*
      3      (1 + D5*homologous_Temp)
 
