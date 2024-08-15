@@ -68,7 +68,7 @@
       real*8 E, nu, A, B, n, m, Tm, Tr, C, epsilon_dot_zero, D1, D2,
      1 D3, D4, D5, beta, Cp, D, pl_disp_failure, dmg_evol,
      2 convergence_tolerance_factor, tolerance, mu, lambda, 
-     3 eps, Temp, sigmaY, equiv_stress, pl_strain_inc,  
+     3 eps, Temp, sigmaY, equiv_stress, pl_strain_inc, trace_strainInc,  
      4 eps_iter, equiv_stress_jc, f, pl_strain_inc_min, 
      5 pl_strain_inc_max, dWork, dPwork, rho, equiv_strain_fracture,
      6 C_mat(ndir+nshr, ndir+nshr), stress_old(ndir+nshr),
@@ -126,6 +126,18 @@
       ! Maximum number of iterations
       max_num_iter = props(21)
 
+      ! Input parameters validation
+      if (pl_disp_failure == 0.d0) then
+          print*, 'ERROR - pl_disp_failure cannot be zero (props(16))'
+          call XPLB_EXIT
+      else if (Cp == 0.d0) then
+          print*, 'ERROR - Cp cannot be zero (props(18))'
+          call XPLB_EXIT
+      else if (rho == 0.d0) then
+          print*, 'ERROR - rho cannot be zero (props(19))'
+          call XPLB_EXIT
+      end if 
+
 
 ! ############################ Elasticity Matrix ############################
 
@@ -164,10 +176,18 @@
           
           ! ############################## Initial state ###############################   
           if (stateOld(i, 1) == 0.d0) then
-              
+       
               ! Compute Hooke's Law as a function of the strain increment
-              call elastic_stress(strainInc(i, 1:ndir+nshr), stressNew(i, 1:ndir+nshr),  
-     1                            stressOld(i, 1:ndir+nshr), lambda, mu, ndir, nshr)
+              ! Trace calculation (EPSILON_kk)
+              trace_strainInc = sum(strainInc(i, 1:ndir))
+            
+              ! Calculate the direct components
+              stressNew(i, 1:ndir) = stressOld(i, 1:ndir) +  
+     1        lambda*trace_strainInc + 2*mu*strainInc(i, 1:ndir)
+
+              ! Calculate the shear components
+              stressNew(i, ndir+1:ndir+nshr) = stressOld(i, ndir+1:ndir+nshr) +
+     1        2*mu*strainInc(i, ndir+1:ndir+nshr)     
               
               stateNew(i, 1) = 1.d0           ! Initiation flag
               stateNew(i, 2) = 0.d0           ! Equivalent plastic strain
@@ -261,8 +281,10 @@
      1                                   dev_stress, ndir, nshr)
 
                   ! Calculate the Johnson-Cook equivalent stress
-                  call johnson_cook_plasticity(eps_iter, A, B, n, m, Tm, Tr, Temp, C,
-     1                                         epsilon_dot_zero, eps_rate, equiv_stress_jc)
+                  call johnson_cook_plasticity(eps_iter, A, B, n, m, 
+     1                                         Tm, Tr, Temp, C, 
+     2                                         epsilon_dot_zero, 
+     3                                         eps_rate, equiv_stress_jc)
 
                   ! If the calculated JC is less than the previous one, take the previous one
                   ! as equivalent yield stress. 
@@ -311,12 +333,13 @@
 
               ! Store the stress tensor in SDVs for damage evolution computation
               do j = 1, ndir+nshr
-                stateNew(i, j + 9) = stressNew(i, j)
+                  stateNew(i, j + 9) = stressNew(i, j)
               end do
 
               ! Calculate the work increment
-              dWork = dot_product(0.5d0 * (corrected_stress_iter(1:6) + stress_old(1:6)), 
-     1                            strainInc(i, 1:6))
+              dWork = dot_product(0.5d0 * (corrected_stress_iter(1:ndir+nshr) + 
+     1                            stress_old(1:ndir+nshr)), 
+     2                            strainInc(i, 1:ndir+nshr))
 
               ! Calculate the plastic work increment
               dPwork = 0.5d0 * pl_strain_inc * equiv_stress
@@ -333,17 +356,19 @@
      2                                 corrected_stress_iter, ndir, nshr)
               
               ! Update the parameter D of the Johnson-Cook damage model
-              D = D + abs(pl_strain_inc / equiv_strain_fracture)
+              if (equiv_strain_fracture /= 0.d0) then
+                  D = D + abs(pl_strain_inc / equiv_strain_fracture)
+              end if    
 
               ! Fracture is allowed to occur when D = 1.0
-              if (D >= 1) then
-                D = 1.d0
-                dmg_evol = dmg_evol + 
-     1          abs(pl_strain_inc * charLength(i) / pl_disp_failure)
-                if (dmg_evol >= 1) then
-                    dmg_evol = 1.d0
-                end if
-                stressNew(i, 1:ndir+nshr) = (1.d0 - dmg_evol)*stressNew(i, 1:ndir+nshr)
+              if (D >= 1.d0) then
+                  D = 1.d0
+                  dmg_evol = dmg_evol + 
+     1            abs(pl_strain_inc * charLength(i) / pl_disp_failure)
+                  if (dmg_evol >= 1.d0) then
+                      dmg_evol = 1.d0
+                  end if
+                  stressNew(i, 1:ndir+nshr) = (1.d0 - dmg_evol)*stressNew(i, 1:ndir+nshr)
               end if
 
               ! Update the state variables
