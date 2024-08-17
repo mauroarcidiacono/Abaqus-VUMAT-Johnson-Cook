@@ -60,19 +60,19 @@
      2    equiv_stress_jc  
 
           if (T < Tr) then
-	       homologous_Temp = 0.d0
-	   else if (T > Tm) then
-	       homologous_Temp = 1.d0
-	   else
-		homologous_Temp = (T - Tr)/(Tm - Tr)
-	   end if
-	  
-	   if (eps_rate == 0.d0) then
-	       eps_rate = epsilon_dot_zero
-	   end if
-		
-          equiv_stress_jc = (A + B*eps_iter**n)*
-     1    (1 + C*log(eps_rate/epsilon_dot_zero))*
+              homologous_Temp = 0.d0
+          else if (T > Tm) then
+              homologous_Temp = 1.d0
+          else
+              homologous_Temp = (T - Tr)/(Tm - Tr)
+          end if
+
+          if (eps_rate == 0.d0) then
+              eps_rate = epsilon_dot_zero
+          end if
+
+          equiv_stress_jc = (A + B*eps_iter**n) *
+     1    (1 + C*log(eps_rate/epsilon_dot_zero)) *
      2    (1 - homologous_Temp**m)
 
       return
@@ -92,16 +92,16 @@
      3    stress_tensor(ndir+nshr), hyd, equiv_stress
 
           if (T < Tr) then
-	       homologous_Temp = 0.d0
-	   else if (T > Tm) then
-	       homologous_Temp = 1.d0
-	   else
-	       homologous_Temp = (T - Tr)/(Tm - Tr)
-	   end if
-	  
-	   if (eps_rate == 0.d0) then
-	       eps_rate = epsilon_dot_zero
-	   end if
+              homologous_Temp = 0.d0
+          else if (T > Tm) then
+              homologous_Temp = 1.d0
+          else
+              homologous_Temp = (T - Tr)/(Tm - Tr)
+          end if
+
+          if (eps_rate == 0.d0) then
+              eps_rate = epsilon_dot_zero
+          end if
 
           ! Calculate the hydrostatic component of the stress tensor
           hyd = sum(stress_tensor(1:ndir))/3.d0
@@ -112,10 +112,10 @@
           else
               pressure_stress_ratio = hyd/equiv_stress
           end if
-		
+
           equiv_strain_frac = (D1 + 
-     1    D2*exp(-D3*pressure_stress_ratio))*
-     2    (1 + D4*log(eps_rate/epsilon_dot_zero))*
+     1    D2*exp(-D3*pressure_stress_ratio)) *
+     2    (1 + D4*log(eps_rate/epsilon_dot_zero)) *
      3    (1 + D5*homologous_Temp)
 
       return
