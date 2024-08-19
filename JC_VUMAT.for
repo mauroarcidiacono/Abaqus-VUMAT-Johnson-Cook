@@ -4,7 +4,7 @@
 ! deformation.
 !
 ! Abaqus version: Abaqus 2022
-! Intel oneAPI Compiler 2022.0.2 intel64
+! Intel Fortran Compiler 2021.11
 ! Visual Studio 2019
 !
 ! Author: Mauro Francisco Arcidiacono
@@ -140,18 +140,18 @@
       ! Initialize the elasticity matrix to zero
       C_mat = 0.d0
 
-	  do i = 1, ndir
-	      do j = 1, ndir
+      do i = 1, ndir
+          do j = 1, ndir
               if (i == j) then
                   C_mat(i, j) = lambda + 2.d0*mu
               else
-	              C_mat(i, j) = lambda
+                  C_mat(i, j) = lambda
               end if
-	      end do 
-	  end do 
-	  do i = ndir + 1, ndir + nshr
-	      C_mat(i, i) = 2.d0*mu
-	  end do 
+          end do 
+      end do 
+      do i = ndir + 1, ndir + nshr
+          C_mat(i, i) = 2.d0*mu
+      end do 
 
 
 ! ###########################################################################################################      
@@ -171,11 +171,11 @@
             
               ! Calculate the direct components
               stressNew(i, 1:ndir) = stressOld(i, 1:ndir) +  
-     1        lambda*trace_strainInc + 2*mu*strainInc(i, 1:ndir)
+     1        lambda*trace_strainInc + 2.d0*mu*strainInc(i, 1:ndir)
 
               ! Calculate the shear components
               stressNew(i, ndir+1:ndir+nshr) = stressOld(i, ndir+1:ndir+nshr) +
-     1        2*mu*strainInc(i, ndir+1:ndir+nshr)  
+     1        2.d0*mu*strainInc(i, ndir+1:ndir+nshr)  
               
               stateNew(i, 1) = 1.d0           ! Initiation flag
               stateNew(i, 2) = 0.d0           ! Equivalent plastic strain
@@ -203,7 +203,7 @@
               trial_stress = 0.d0                                       ! Trial total stress with increment
 
               ! stress_old stores the stress tensor in the previous step
-              if (D < 1) then
+              if (D < 1.d0) then
                   stress_old(1:ndir+nshr) = stressOld(i, 1:ndir+nshr)       
               else
                   stress_old(1:ndir+nshr) = stateOld(i, 10:ndir+nshr+10)    
@@ -269,8 +269,10 @@
      1                                   dev_stress, ndir, nshr)
 
                   ! Calculate the Johnson-Cook equivalent stress
-                  call johnson_cook_plasticity(eps_iter, A, B, n, m, Tm, Tr, Temp, C,
-     1                                         epsilon_dot_zero, eps_rate, equiv_stress_jc)
+                  call johnson_cook_plasticity(eps_iter, A, B, n, m, 
+     1                                         Tm, Tr, Temp, C,
+     2                                         epsilon_dot_zero, 
+     3                                         eps_rate, equiv_stress_jc)
 
                   ! If the calculated JC is less than the previous one, take the previous one
                   ! as equivalent yield stress. 
@@ -319,12 +321,12 @@
 
               ! Store the stress tensor in SDVs for damage evolution computation
               do j = 1, ndir+nshr
-                stateNew(i, j + 9) = stressNew(i, j)
+                  stateNew(i, j + 9) = stressNew(i, j)
               end do
 
               ! Calculate the work increment
-              dWork = dot_product(0.5d0 * (corrected_stress_iter(1:6) + stress_old(1:6)), 
-     1                            strainInc(i, 1:6))
+              dWork = dot_product(0.5d0 * (corrected_stress_iter(1:ndir+nshr) + stress_old(1:ndir+nshr)), 
+     1                            strainInc(i, 1:ndir+nshr))
 
               ! Calculate the plastic work increment
               dPwork = 0.5d0 * pl_strain_inc * equiv_stress
@@ -341,17 +343,19 @@
      2                                 corrected_stress_iter, ndir, nshr)
               
               ! Update the parameter D of the Johnson-Cook damage model
-              D = D + abs(pl_strain_inc / equiv_strain_fracture)
+              if (equiv_strain_fracture /= 0.d0) then
+                  D = D + abs(pl_strain_inc / equiv_strain_fracture)
+              end if
 
               ! Fracture is allowed to occur when D = 1.0
-              if (D >= 1) then
-                D = 1.d0
-                dmg_evol = dmg_evol + 
-     1          abs(pl_strain_inc * charLength(i) / pl_disp_failure)
-                if (dmg_evol >= 1) then
-                    dmg_evol = 1.d0
-                end if
-                stressNew(i, 1:ndir+nshr) = (1.d0 - dmg_evol)*stressNew(i, 1:ndir+nshr)
+              if (D >= 1.d0) then
+                  D = 1.d0
+                  dmg_evol = dmg_evol + 
+     1            abs(pl_strain_inc * charLength(i) / pl_disp_failure)
+                  if (dmg_evol >= 1.d0) then
+                      dmg_evol = 1.d0
+                  end if
+                  stressNew(i, 1:ndir+nshr) = (1.d0 - dmg_evol)*stressNew(i, 1:ndir+nshr)
               end if
 
               ! Update the state variables
@@ -364,7 +368,7 @@
               stateNew(i, 7) = dmg_evol                                                       ! Damage evolution parameter
               stateNew(i, 8) = stateOld(i, 8) + num_iter                                      ! Total number of iterations
 
-              if (dmg_evol >= 1) then
+              if (dmg_evol >= 1.d0) then
                   stateNew(i, 9) = 0    ! Delete element
               else
                   stateNew(i, 9) = 1    ! Active element
