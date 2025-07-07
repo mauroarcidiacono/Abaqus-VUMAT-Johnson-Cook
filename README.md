@@ -8,7 +8,7 @@ The implementation is fully documented and based on a return mapping algorithm u
 
 A detailed derivation of the governing equations and numerical implementation is provided in the following PDF:
 
-**[johnson-cook-vumat-derivation.pdf](./johnson-cook-vumat-doc.pdf)**
+**[johnson-cook-vumat-doc.pdf](./johnson-cook-vumat-doc.pdf)**
 
 ## Validation
 
