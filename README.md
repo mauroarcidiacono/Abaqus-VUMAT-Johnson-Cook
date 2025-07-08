@@ -1,5 +1,5 @@
 # Johnson–Cook VUMAT with Damage and Taylor–Quinney Heating
-[![DOI](https://zenodo.org/badge/719144148.svg)](https://doi.org/10.5281/zenodo.15839293)
+[![DOI](https://zenodo.org/badge/719144148.svg)](https://doi.org/10.5281/zenodo.15839293) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 This repository contains a user-defined material subroutine (VUMAT) implementing the Johnson–Cook constitutive model for finite deformation plasticity with strain rate and temperature dependence, as well as isotropic damage evolution. The code is developed for use in `Abaqus/Explicit` and written in double precision Fortran.
 
